@@ -3,17 +3,18 @@ using UnityEngine;
 
 public class CarThrust : MonoBehaviour
 {
-    [SerializeField] private float engineForce = 6000f;
-    [SerializeField] private float turnTorque = 6000f;
-    [SerializeField] private float damping = 3000f;
-    [SerializeField] private float springStrength = 20000f;
-    [SerializeField] private float damperStrength = 5000f;
-    [SerializeField] private float frictionCoefficient = 0.1f;
-    [SerializeField] private float groundCheckDistance = 0.6f;
+    [SerializeField] private LayerMask groundLayer = ~0;
+
+    [SerializeField] private float engineForce;
+    [SerializeField] private float turnTorque;
+    [SerializeField] private float damping;
+    [SerializeField] private float springStrength;
+    [SerializeField] private float damperStrength;
+    [SerializeField] private float frictionCoefficient;
     [SerializeField] private Transform[] wheelAnchor = Array.Empty<Transform>();
 
-    [SerializeField] private float restLength = 0.5f;
-    [SerializeField] private float wheelRadius = 0.35f;
+    [SerializeField] private float restLength;
+    [SerializeField] private float wheelRadius;
 
 
     private const int WHEEL_COUNT = 4;
@@ -67,7 +68,6 @@ public class CarThrust : MonoBehaviour
     private void FixedUpdate()
     {
         MeasureAcceleration();
-        CheckGround();
         SimulateSuspension();
         ApplyFriction();
         ApplyThrust();
@@ -93,29 +93,32 @@ public class CarThrust : MonoBehaviour
     }
 
     private void SimulateWheel(int i)
+{
+    var wheel = wheelAnchor[i];
+    var up = transform.up;
+    springForce[i] = 0;
+
+    var hitGround = Physics.Raycast(wheel.position, -up, out var hit, MaxRayDistance, groundLayer,
+        QueryTriggerInteraction.Ignore);
+
+    if (!hitGround)
     {
-        var wheel = wheelAnchor[i];
-        var up = transform.up;
-        springForce[i] = 0;
-
-        var hitGround = Physics.Raycast(wheel.position, -up, out var hit, groundCheckDistance, ~0,
-            QueryTriggerInteraction.Ignore);
-        if (!hitGround)
-        {
-            wheelGrounded[i] = false;
-            hitDistance[i] = MaxRayDistance;
-            compression[i] = 0;
-            return;
-        }
-
-        wheelGrounded[i] = true;
-        hitDistance[i] = hit.distance;
-        compression[i] = MaxRayDistance - hit.distance;
-        float cornerSpeed = Vector3.Dot(rb.GetPointVelocity(wheel.position), up);
-        float force = springStrength * compression[i] - cornerSpeed * damperStrength;
-        springForce[i] = Mathf.Max(0,force);
-        rb.AddForceAtPosition(up * force, wheel.position);
+        wheelGrounded[i] = false;
+        hitDistance[i] = MaxRayDistance;
+        compression[i] = 0;
+        return;
     }
+
+    wheelGrounded[i] = true;
+    hitDistance[i] = hit.distance;
+    compression[i] = MaxRayDistance - hit.distance;
+    
+    float cornerSpeed = Vector3.Dot(rb.GetPointVelocity(wheel.position), up);
+    float force = springStrength * compression[i] - cornerSpeed * damperStrength;
+    springForce[i] = Mathf.Max(0, force);
+    
+    rb.AddForceAtPosition(up * force, wheel.position);
+}
 
 
     private void ApplyTurnDamping()
@@ -151,12 +154,6 @@ public class CarThrust : MonoBehaviour
         rb.AddForce(frictionForce);
 
 
-    }
-
-    private void CheckGround()
-    {
-        grounded = Physics.Raycast(transform.position, -transform.up, groundCheckDistance, ~0,
-            QueryTriggerInteraction.Ignore);
     }
 
     private void ApplyThrust()
